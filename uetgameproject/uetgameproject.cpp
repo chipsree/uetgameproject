@@ -2,6 +2,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
 #include "tile.h"
+#include "timer.h"
 #include <string>
 using namespace std;
 
@@ -30,7 +31,7 @@ int main(int argc, char *argv[])
     }
 
     // Create a window
-    state.window = SDL_CreateWindow("SDL3 Demo", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    state.window = SDL_CreateWindow("Minesweeper", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (!state.window)
     {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating window", nullptr);
@@ -52,13 +53,13 @@ int main(int argc, char *argv[])
     SDL_Texture* emptyTex = IMG_LoadTexture(state.renderer, "assets/empty_tile.png");
     SDL_Texture* flagTex = IMG_LoadTexture(state.renderer, "assets/flag.png");
     SDL_Texture* mineTex = IMG_LoadTexture(state.renderer, "assets/mine.png");
-    SDL_Texture* numberTextures[9] = { nullptr };
-    for (int i = 0; i < 9; ++i) {
+    SDL_Texture* numberTextures[9];
+    for (int i = 1; i < 8; ++i) {
         std::string path = "assets/" + std::to_string(i) + ".png";
         numberTextures[i] = IMG_LoadTexture(state.renderer, path.c_str());
     }
 
-    const int numMines = 60;
+    const int numMines = 80;
     placeMines(numMines);
 
     // The game loop
@@ -68,29 +69,38 @@ int main(int argc, char *argv[])
         SDL_Event event{ 0 };
         while (SDL_PollEvent(&event))
         {
+            if (gameOver) {
+                if (handleGameOverEvent(event, numMines)) {
+                    continue; // Skip further event processing for this event
+                }
+                // Do NOT process tile clicks here
+            } else {
+                // Handle tile clicks here
+                int mouseX = static_cast<int>(event.button.x);
+                int mouseY = static_cast<int>(event.button.y);
+                int col = (mouseX - GRID_ORIGIN_X) / TILE_SIZE;
+                int row = (mouseY - GRID_ORIGIN_Y) / TILE_SIZE;
+
+                if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
+                    // Only handle mouse button down events
+                    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                        if (event.button.button == SDL_BUTTON_LEFT) {
+                            revealTile(row, col);
+                        } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                            extern Tile grid[GRID_ROWS][GRID_COLS];
+                            if (!grid[row][col].revealed) {
+                                grid[row][col].flagged = !grid[row][col].flagged;
+                            }
+                        }
+                    }
+                }
+            }
+
             switch (event.type)
             {
             case SDL_EVENT_QUIT:
                 running = false;
                 break;
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                {
-                    int mouseX = static_cast<int>(event.button.x);
-                    int mouseY = static_cast<int>(event.button.y);
-                    int col = mouseX / TILE_SIZE;
-                    int row = mouseY / TILE_SIZE;
-
-                    if (event.button.button == SDL_BUTTON_LEFT) {
-                        revealTile(row, col);
-                    } else if (event.button.button == SDL_BUTTON_RIGHT) {
-                        // Toggle flag only if tile is not revealed
-                        extern Tile grid[GRID_ROWS][GRID_COLS];
-                        if (!grid[row][col].revealed) {
-                            grid[row][col].flagged = !grid[row][col].flagged;
-                        }
-                    }
-                    break;
-                }
             }
         }
         // Clear the screen

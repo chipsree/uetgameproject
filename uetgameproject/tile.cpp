@@ -1,10 +1,24 @@
 #include "tile.h"
-#include <SDL3_image/SDL_image.h>
-#include <random>
 
 Tile grid[GRID_ROWS][GRID_COLS];
+// Definition of gameOver
+bool gameOver = false;
+
+// Helper to reset the board
+void resetBoard(int numMines) {
+    for (int r = 0; r < GRID_ROWS; ++r) {
+        for (int c = 0; c < GRID_COLS; ++c) {
+            grid[r][c].hasMine = false;
+            grid[r][c].revealed = false;
+            grid[r][c].flagged = false;
+        }
+    }
+    placeMines(numMines);
+    gameOver = false;
+}
 
 void revealTile(int row, int col) {
+    if (gameOver) return;
     if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS)
         return;
 
@@ -14,16 +28,24 @@ void revealTile(int row, int col) {
 
     tile.revealed = true;
 
-    if (tile.hasMine)
+    if (tile.hasMine) {
+        for (int r = 0; r < GRID_ROWS; ++r) {
+            for (int c = 0; c < GRID_COLS; ++c) {
+                if (grid[r][c].hasMine) {
+                    grid[r][c].revealed = true;
+                }
+            }
+        }
+        gameOver = true;
         return;
+    }
 
     int adjacent = countAdjacentMines(row, col);
     if (adjacent == 0) {
-		// Reveal adjacent tiles if tile has no adjacent mines
-        for (int dr = -1; dr <= 1; ++dr) {
-            for (int dc = -1; dc <= 1; ++dc) {
-                if (dr != 0 || dc != 0) {
-                    revealTile(row + dr, col + dc);
+        for (int i = -1; i <= 1; ++i) {
+            for (int j = -1; j <= 1; ++j) {
+                if (i != 0 || j != 0) {
+                    revealTile(row + i, col + j);
                 }
             }
         }
@@ -32,15 +54,34 @@ void revealTile(int row, int col) {
 
 int countAdjacentMines(int row, int col) {
     int count = 0;
-    for (int dr = -1; dr <= 1; ++dr) {
-        for (int dc = -1; dc <= 1; ++dc) {
-            int r = row + dr, c = col + dc;
+    for (int i = -1; i <= 1; ++i) {
+        for (int j = -1; j <= 1; ++j) {
+            int r = row + i, c = col + j;
             if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
                 if (grid[r][c].hasMine) count++;
             }
         }
     }
     return count;
+}
+
+void renderGameOverScreen(SDL_Renderer* renderer) {
+    // Draw semi-transparent overlay
+    SDL_FRect overlay = {0, 0, static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT)};
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180); // Black, semi-transparent
+    SDL_RenderFillRect(renderer, &overlay);
+
+    // Draw "Game Over" text background (rectangle placeholder)
+    SDL_FRect textRect = {WINDOW_WIDTH / 2.0f - 100, WINDOW_HEIGHT / 2.0f - 60, 200, 40};
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red
+    SDL_RenderFillRect(renderer, &textRect);
+
+    // Draw reset button background (rectangle placeholder)
+    SDL_FRect buttonRect = {WINDOW_WIDTH / 2.0f - 60, WINDOW_HEIGHT / 2.0f + 10, 120, 40};
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); // Light gray
+    SDL_RenderFillRect(renderer, &buttonRect);
+
+    // For actual text, use SDL_ttf (not shown here)
 }
 
 void renderTiles(SDL_Renderer* renderer, SDL_Texture* tileTex, SDL_Texture* emptyTex, SDL_Texture* numberTextures[9], SDL_Texture* flagTex, SDL_Texture* mineTex) {
@@ -73,6 +114,10 @@ void renderTiles(SDL_Renderer* renderer, SDL_Texture* tileTex, SDL_Texture* empt
             }
         }
     }
+
+    if (gameOver) {
+        renderGameOverScreen(renderer);
+    }
 }
 
 void placeMines(int numMines) {
@@ -90,4 +135,20 @@ void placeMines(int numMines) {
             placed++;
         }
     }
+}
+
+// Call this in your main event loop to handle reset button click
+bool handleGameOverEvent(const SDL_Event& event, int numMines) {
+    if (!gameOver) return false;
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        int mx = event.button.x;
+        int my = event.button.y;
+        SDL_FRect buttonRect = {WINDOW_WIDTH / 2.0f - 60, WINDOW_HEIGHT / 2.0f + 10, 120, 40};
+        if (mx >= buttonRect.x && mx <= buttonRect.x + buttonRect.w &&
+            my >= buttonRect.y && my <= buttonRect.y + buttonRect.h) {
+            resetBoard(numMines);
+            return true; // Reset occurred
+        }
+    }
+    return false;
 }
