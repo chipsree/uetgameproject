@@ -17,6 +17,7 @@ void cleanup(SDLState &state)
     SDL_DestroyRenderer(state.renderer);
     SDL_DestroyWindow(state.window);
     SDL_Quit();
+    TTF_Quit();
 }
 
 int main(int argc, char *argv[])
@@ -30,6 +31,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+	//Initialize SDL_ttf
+    if (!TTF_Init()) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error initializing SDL_ttf", nullptr);
+        SDL_Quit();
+        return 1;
+	}
+
     // Create a window
     state.window = SDL_CreateWindow("Minesweeper", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (!state.window)
@@ -41,6 +49,7 @@ int main(int argc, char *argv[])
 
     // Create a renderer
     state.renderer = SDL_CreateRenderer(state.window, nullptr);
+	SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
     if (!state.renderer)
     {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating renderer", state.window);
@@ -59,10 +68,16 @@ int main(int argc, char *argv[])
         numberTextures[i] = IMG_LoadTexture(state.renderer, path.c_str());
     }
 
-    const int numMines = 80;
-    placeMines(numMines);
+    // Font loading
+    TTF_Font* font = TTF_OpenFont("assets/ARIAL.TTF", 32); // Adjust path/size as needed
 
     // The game loop
+    const int numMines = 100;
+    placeMines(numMines);
+
+    Timer gameTimer;
+    gameTimer.start();
+
     bool running = true;
     while (running)
     {
@@ -70,19 +85,29 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event))
         {
             if (gameOver) {
+                gameTimer.pause();  // ← Stops counting when you lose
                 if (handleGameOverEvent(event, numMines)) {
-                    continue; // Skip further event processing for this event
+                    gameTimer.stop();
+                    gameTimer.start();
+                    continue;
                 }
-                // Do NOT process tile clicks here
-            } else {
-                // Handle tile clicks here
+            }
+            else if (gameWin) {
+                gameTimer.pause();  // ← Stops counting when you win
+                if (handleGameWinEvent(event, numMines)) {
+                    gameTimer.stop();
+                    gameTimer.start();
+                    continue;
+                }
+            }
+            else {
+                // mouse clicks
                 int mouseX = static_cast<int>(event.button.x);
                 int mouseY = static_cast<int>(event.button.y);
                 int col = (mouseX - GRID_ORIGIN_X) / TILE_SIZE;
                 int row = (mouseY - GRID_ORIGIN_Y) / TILE_SIZE;
 
                 if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
-                    // Only handle mouse button down events
                     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                         if (event.button.button == SDL_BUTTON_LEFT) {
                             revealTile(row, col);
@@ -104,14 +129,17 @@ int main(int argc, char *argv[])
             }
         }
         // Clear the screen
-        SDL_SetRenderDrawColor(state.renderer, 0, 0, 0, 255);
+        SDL_SetRenderDrawColor(state.renderer, 195, 195, 195, 255);
         SDL_RenderClear(state.renderer);
 
         // Pass all required textures to renderTiles
         renderTiles(state.renderer, tileTex, emptyTex, numberTextures, flagTex, mineTex);
 
+        gameTimer.render(state.renderer, font, WINDOW_WIDTH);
+
         // Present the backbuffer
         SDL_RenderPresent(state.renderer);
+
     }
 
     cleanup(state);
