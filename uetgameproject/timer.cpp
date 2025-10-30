@@ -1,29 +1,39 @@
-// timer.cpp
 #include "timer.h"
-#include <string>
+
 
 void Timer::render(SDL_Renderer* renderer, TTF_Font* font, int windowWidth) const {
-    int seconds = getSeconds();
-    std::string timerText = std::to_string(seconds) + "s";
-    SDL_Color timerColor = { 255, 255, 255, 255 }; // White text
+    int totalSeconds = getSeconds();
+    int minutes = totalSeconds / 60;
+    int seconds = totalSeconds % 60;
 
-    SDL_Surface* timerSurface = TTF_RenderText_Blended(font, timerText.c_str(), timerText.length(), timerColor);
-    if (timerSurface) {
-        SDL_Texture* timerTexture = SDL_CreateTextureFromSurface(renderer, timerSurface);
-        int textW = timerSurface->w;
-        int textH = timerSurface->h;
+    std::ostringstream timerStream;
+    timerStream << minutes << ":" << std::setw(2) << std::setfill('0') << seconds;
+    std::string timerText = timerStream.str();
+
+    SDL_Color timerColor = { 255, 255, 255, 255 };
+
+    SDL_Surface* timerSurface = TTF_RenderText_Blended(font, timerText.c_str(), timerText.size(), timerColor);
+    if (!timerSurface) return;
+
+    SDL_Texture* timerTexture = SDL_CreateTextureFromSurface(renderer, timerSurface);
+    if (!timerTexture) {
         SDL_DestroySurface(timerSurface);
-
-        // Center in top bar (96 pixels tall)
-        SDL_FRect timerRect = {
-            windowWidth / 2.0f - textW / 2.0f,
-            48.0f - textH / 2.0f,  // Center vertically in 96px bar
-            static_cast<float>(textW),
-            static_cast<float>(textH)
-        };
-        SDL_RenderTexture(renderer, timerTexture, nullptr, &timerRect);
-        SDL_DestroyTexture(timerTexture);
+        return;
     }
+
+    int textW = timerSurface->w;
+    int textH = timerSurface->h;
+    SDL_DestroySurface(timerSurface);
+
+    SDL_FRect timerRect = {
+        windowWidth / 2.0f - textW / 2.0f,
+        48.0f - textH / 2.0f,
+        static_cast<float>(textW),
+        static_cast<float>(textH)
+    };
+
+    SDL_RenderTexture(renderer, timerTexture, nullptr, &timerRect);
+    SDL_DestroyTexture(timerTexture);
 }
 
 Timer::Timer() : startTicks(0), started(false), paused(false), pausedTicks(0) {}
