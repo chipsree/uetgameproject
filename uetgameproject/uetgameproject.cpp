@@ -6,13 +6,15 @@
 #include <string>
 using namespace std;
 
+// Structure to hold SDL state
 struct SDLState
 {
     SDL_Window* window;
     SDL_Renderer* renderer;
 };
 
-void cleanup(SDLState &state)
+// Cleanup function to free resources
+void cleanup(SDLState& state)
 {
     SDL_DestroyRenderer(state.renderer);
     SDL_DestroyWindow(state.window);
@@ -20,25 +22,25 @@ void cleanup(SDLState &state)
     TTF_Quit();
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     SDLState state;
 
-    // Initialize SDL
+	// Initialize SDL3
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error initializing SDL3", nullptr);
         return 1;
     }
 
-	//Initialize SDL_ttf
+	// Initialize SDL_ttf
     if (!TTF_Init()) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error initializing SDL_ttf", nullptr);
         SDL_Quit();
         return 1;
-	}
+    }
 
-    // Create a window
+	// Create window
     state.window = SDL_CreateWindow("Minesweeper", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (!state.window)
     {
@@ -47,9 +49,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Create a renderer
+	// Create renderer
     state.renderer = SDL_CreateRenderer(state.window, nullptr);
-	SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawBlendMode(state.renderer, SDL_BLENDMODE_BLEND);
     if (!state.renderer)
     {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error", "Error creating renderer", state.window);
@@ -68,15 +70,17 @@ int main(int argc, char *argv[])
         numberTextures[i] = IMG_LoadTexture(state.renderer, path.c_str());
     }
 
-    // Font loading
-    TTF_Font* font = TTF_OpenFont("assets/ARIAL.TTF", 32); // Adjust path/size as needed
+    TTF_Font* font = TTF_OpenFont("assets/ARIAL.TTF", 32);
 
     // The game loop
-    const int numMines = 100;
-    placeMines(numMines);
+    // Remove this line: GameState currentGameState = GameState::MINE_MENU;
+    extern GameState currentGameState;  // Use the global one from tile.cpp
+    currentGameState = GameState::MINE_MENU;  // Set it to menu
+    int numMines = 100;
+    placeMines(numMines);  // Remove this line or move it after first menu selection
 
     Timer gameTimer;
-    gameTimer.start();
+    // Don't start timer yet - gameTimer.start();
 
     bool running = true;
     while (running)
@@ -84,24 +88,25 @@ int main(int argc, char *argv[])
         SDL_Event event{ 0 };
         while (SDL_PollEvent(&event))
         {
-            if (gameOver) {
-                gameTimer.pause();  // ← Stops counting when you lose
-                if (handleGameOverEvent(event, numMines)) {
+            // Handle mine menu selection FIRST, before checking game state
+            if (currentGameState == GameState::MINE_MENU) {
+                int selectedMines = handleMineMenuEvent(event);
+                if (selectedMines != -1) {
+                    numMines = selectedMines;
                     gameTimer.stop();
                     gameTimer.start();
-                    continue;
                 }
             }
-            else if (gameWin) {
-                gameTimer.pause();  // ← Stops counting when you win
-                if (handleGameWinEvent(event, numMines)) {
-                    gameTimer.stop();
-                    gameTimer.start();
-                    continue;
-                }
+            else if (currentGameState == GameState::GAME_OVER) {
+                gameTimer.pause();
+                handleGameOverEvent(event, numMines);
             }
-            else {
-                // mouse clicks
+            else if (currentGameState == GameState::GAME_WIN) {
+                gameTimer.pause();
+                handleGameWinEvent(event, numMines);
+            }
+            else if (currentGameState == GameState::PLAYING) {
+                // mouse clicks during gameplay
                 int mouseX = static_cast<int>(event.button.x);
                 int mouseY = static_cast<int>(event.button.y);
                 int col = (mouseX - GRID_ORIGIN_X) / TILE_SIZE;
@@ -111,7 +116,8 @@ int main(int argc, char *argv[])
                     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                         if (event.button.button == SDL_BUTTON_LEFT) {
                             revealTile(row, col);
-                        } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                        }
+                        else if (event.button.button == SDL_BUTTON_RIGHT) {
                             extern Tile grid[GRID_ROWS][GRID_COLS];
                             if (!grid[row][col].revealed) {
                                 grid[row][col].flagged = !grid[row][col].flagged;
@@ -128,21 +134,23 @@ int main(int argc, char *argv[])
                 break;
             }
         }
+
         // Clear the screen
         SDL_SetRenderDrawColor(state.renderer, 195, 195, 195, 255);
         SDL_RenderClear(state.renderer);
 
-        // Pass all required textures to renderTiles
+        // Render game elements
         renderTiles(state.renderer, tileTex, emptyTex, numberTextures, flagTex, mineTex);
 
-        gameTimer.render(state.renderer, font, WINDOW_WIDTH);
+        // Only render timer during gameplay
+        if (currentGameState == GameState::PLAYING) {
+            gameTimer.render(state.renderer, font, WINDOW_WIDTH);
+        }
 
-        // Present the backbuffer
+		// Present the rendered frame
         SDL_RenderPresent(state.renderer);
-
     }
 
     cleanup(state);
     return 0;
 }
-

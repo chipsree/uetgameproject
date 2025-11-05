@@ -10,8 +10,14 @@ constexpr int WINDOW_WIDTH = 960;
 constexpr int WINDOW_HEIGHT = 800;
 constexpr int GRID_COLS = WINDOW_WIDTH / TILE_SIZE;
 constexpr int GRID_ROWS = WINDOW_HEIGHT / TILE_SIZE - 3;
+enum class GameState {
+    PLAYING,
+    GAME_OVER,
+    GAME_WIN,
+    MINE_MENU
+};
 
-// Grid origin (top-left corner of grid in window coordinates)
+// Grid origin for clicks and rendering
 constexpr int GRID_ORIGIN_X = 0;
 constexpr int GRID_ORIGIN_Y = 96;
 
@@ -23,12 +29,16 @@ struct Tile {
 
 extern bool gameOver;
 extern bool gameWin;
+extern bool firstClick;
 
 void revealTile(int row, int col);
 int countAdjacentMines(int row, int col);
 void placeMines(int numMines);
+void resetBoard(int numMines);
 void renderTiles(SDL_Renderer* renderer, SDL_Texture* tileTex, SDL_Texture* emptyTex, SDL_Texture* numberTextures[9], SDL_Texture* flagTex, SDL_Texture* mineTex);
 bool handleGameOverEvent(const SDL_Event& event, int numMines);
 bool handleGameWinEvent(const SDL_Event& event, int numMines);
 void renderGameOverScreen(SDL_Renderer* renderer);
 void renderGameWinScreen(SDL_Renderer* renderer);
+int handleMineMenuEvent(const SDL_Event& event);
+void renderMineMenuScreen(SDL_Renderer* renderer);

@@ -1,9 +1,11 @@
 #include "tile.h"
 
 Tile grid[GRID_ROWS][GRID_COLS];
-// Definition of gameOver
+
 bool gameOver = false;
 bool gameWin = false;
+GameState currentGameState = GameState::PLAYING;
+bool firstClick = true;
 
 // Global font pointer defined in main and used for rendering overlays
 TTF_Font* gFont = nullptr;
@@ -19,7 +21,9 @@ void resetBoard(int numMines) {
     }
     placeMines(numMines);
     gameOver = false;
-    gameWin = false; // Reset win state
+    gameWin = false;
+    currentGameState = GameState::PLAYING;
+    firstClick = true;
 }
 
 bool checkWin() {
@@ -42,6 +46,27 @@ void revealTile(int row, int col) {
     if (tile.revealed || tile.flagged)
         return;
 
+    // If first click is on a mine, move it
+    if (firstClick && tile.hasMine) {
+        tile.hasMine = false;
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> rowDist(0, GRID_ROWS - 1);
+        std::uniform_int_distribution<> colDist(0, GRID_COLS - 1);
+
+        bool placed = false;
+        while (!placed) {
+            int r = rowDist(gen);
+            int c = colDist(gen);
+            if ((r != row || c != col) && !grid[r][c].hasMine) {
+                grid[r][c].hasMine = true;
+                placed = true;
+            }
+        }
+    }
+
+    firstClick = false;
     tile.revealed = true;
 
     if (tile.hasMine) {
@@ -53,6 +78,7 @@ void revealTile(int row, int col) {
             }
         }
         gameOver = true;
+        currentGameState = GameState::GAME_OVER;
         return;
     }
 
@@ -69,6 +95,7 @@ void revealTile(int row, int col) {
 
     if (checkWin()) {
         gameWin = true;
+        currentGameState = GameState::GAME_WIN;
     }
 }
 
@@ -209,6 +236,76 @@ void renderGameWinScreen(SDL_Renderer* renderer) {
     TTF_CloseFont(smallFont);
 }
 
+void renderMineMenuScreen(SDL_Renderer* renderer) {
+    std::string menuTitle = "Select Difficulty";
+    SDL_Color textColor = { 255, 255, 255, 255 };
+    SDL_Color buttonTextColor = { 0, 0, 0, 255 };
+
+    TTF_Font* largeFont = TTF_OpenFont("assets/ARIAL.TTF", 64);
+    TTF_Font* smallFont = TTF_OpenFont("assets/ARIAL.TTF", 32);
+
+    SDL_Surface* titleSurface = TTF_RenderText_Blended(largeFont, menuTitle.c_str(), menuTitle.length(), textColor);
+
+    SDL_FRect overlay = { 0, 0, static_cast<float>(WINDOW_WIDTH), static_cast<float>(WINDOW_HEIGHT) };
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 240);
+    SDL_RenderFillRect(renderer, &overlay);
+
+    if (titleSurface) {
+        SDL_Texture* titleTexture = SDL_CreateTextureFromSurface(renderer, titleSurface);
+        int titleW = titleSurface->w;
+        int titleH = titleSurface->h;
+        SDL_DestroySurface(titleSurface);
+
+        SDL_FRect titleRect = {
+            WINDOW_WIDTH / 2.0f - titleW / 2.0f,
+            WINDOW_HEIGHT / 2.0f - titleH / 2.0f - 150,
+            static_cast<float>(titleW),
+            static_cast<float>(titleH)
+        };
+        SDL_RenderTexture(renderer, titleTexture, nullptr, &titleRect);
+        SDL_DestroyTexture(titleTexture);
+    }
+
+    const char* options[] = { "Easy", "Medium", "Hard" };
+    const int numOptions = 3;
+    const float buttonWidth = 250;
+    const float buttonHeight = 50;
+    const float buttonSpacing = 70;
+    const float startY = WINDOW_HEIGHT / 2.0f - 50;
+
+    for (int i = 0; i < numOptions; ++i) {
+        SDL_FRect buttonRect = {
+            WINDOW_WIDTH / 2.0f - buttonWidth / 2.0f,
+            startY + i * buttonSpacing,
+            buttonWidth,
+            buttonHeight
+        };
+
+        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+        SDL_RenderFillRect(renderer, &buttonRect);
+
+        SDL_Surface* buttonTextSurface = TTF_RenderText_Blended(smallFont, options[i], strlen(options[i]), buttonTextColor);
+        if (buttonTextSurface) {
+            SDL_Texture* buttonTexture = SDL_CreateTextureFromSurface(renderer, buttonTextSurface);
+            int buttonTextW = buttonTextSurface->w;
+            int buttonTextH = buttonTextSurface->h;
+            SDL_DestroySurface(buttonTextSurface);
+
+            SDL_FRect buttonTextRect = {
+                buttonRect.x + buttonWidth / 2.0f - buttonTextW / 2.0f,
+                buttonRect.y + buttonHeight / 2.0f - buttonTextH / 2.0f,
+                static_cast<float>(buttonTextW),
+                static_cast<float>(buttonTextH)
+            };
+            SDL_RenderTexture(renderer, buttonTexture, nullptr, &buttonTextRect);
+            SDL_DestroyTexture(buttonTexture);
+        }
+    }
+
+    TTF_CloseFont(largeFont);
+    TTF_CloseFont(smallFont);
+}
+
 void renderTiles(SDL_Renderer* renderer, SDL_Texture* tileTex, SDL_Texture* emptyTex, SDL_Texture* numberTextures[9], SDL_Texture* flagTex, SDL_Texture* mineTex) {
     for (int row = 0; row < GRID_ROWS; ++row) {
         for (int col = 0; col < GRID_COLS; ++col) {
@@ -224,26 +321,34 @@ void renderTiles(SDL_Renderer* renderer, SDL_Texture* tileTex, SDL_Texture* empt
             if (!tile.revealed) {
                 if (tile.flagged) {
                     SDL_RenderTexture(renderer, flagTex, nullptr, &dest);
-                } else {
+                }
+                else {
                     SDL_RenderTexture(renderer, tileTex, nullptr, &dest);
                 }
-            } else if (tile.hasMine) {
+            }
+            else if (tile.hasMine) {
                 SDL_RenderTexture(renderer, mineTex, nullptr, &dest);
-            } else {
+            }
+            else {
                 int adjacent = countAdjacentMines(row, col);
                 if (adjacent == 0) {
                     SDL_RenderTexture(renderer, emptyTex, nullptr, &dest);
-                } else {
+                }
+                else {
                     SDL_RenderTexture(renderer, numberTextures[adjacent], nullptr, &dest);
                 }
             }
         }
     }
 
-    if (gameOver) {
+    if (currentGameState == GameState::GAME_OVER) {
         renderGameOverScreen(renderer);
-    } else if (gameWin) {
+    }
+    else if (currentGameState == GameState::GAME_WIN) {
         renderGameWinScreen(renderer);
+    }
+    else if (currentGameState == GameState::MINE_MENU) {
+        renderMineMenuScreen(renderer);
     }
 }
 
@@ -265,14 +370,14 @@ void placeMines(int numMines) {
 }
 
 bool handleGameOverEvent(const SDL_Event& event, int numMines) {
-    if (!gameOver) return false;
+    if (currentGameState != GameState::GAME_OVER) return false;
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         int mx = event.button.x;
         int my = event.button.y;
-        SDL_FRect buttonRect = {WINDOW_WIDTH / 2.0f - 60, WINDOW_HEIGHT / 2.0f + 10, 120, 40};
+        SDL_FRect buttonRect = { WINDOW_WIDTH / 2.0f - 60, WINDOW_HEIGHT / 2.0f + 10, 120, 40 };
         if (mx >= buttonRect.x && mx <= buttonRect.x + buttonRect.w &&
             my >= buttonRect.y && my <= buttonRect.y + buttonRect.h) {
-            resetBoard(numMines);
+            currentGameState = GameState::MINE_MENU;
             return true;
         }
     }
@@ -280,16 +385,47 @@ bool handleGameOverEvent(const SDL_Event& event, int numMines) {
 }
 
 bool handleGameWinEvent(const SDL_Event& event, int numMines) {
-    if (!gameWin) return false;
+    if (currentGameState != GameState::GAME_WIN) return false;
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         int mx = event.button.x;
         int my = event.button.y;
         SDL_FRect buttonRect = {WINDOW_WIDTH / 2.0f - 60, WINDOW_HEIGHT / 2.0f + 10, 120, 40};
         if (mx >= buttonRect.x && mx <= buttonRect.x + buttonRect.w &&
             my >= buttonRect.y && my <= buttonRect.y + buttonRect.h) {
-            resetBoard(numMines);
+            currentGameState = GameState::MINE_MENU;
             return true;
         }
     }
     return false;
+}
+
+int handleMineMenuEvent(const SDL_Event& event) {
+    if (currentGameState != GameState::MINE_MENU) return -1;
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        int mx = event.button.x;
+        int my = event.button.y;
+
+        const float buttonWidth = 250;
+        const float buttonHeight = 50;
+        const float buttonSpacing = 70;
+        const float startY = WINDOW_HEIGHT / 2.0f - 50;
+
+        int mineOptions[] = { 50, 80, 120 };
+
+        for (int i = 0; i < 3; ++i) {
+            SDL_FRect buttonRect = {
+                WINDOW_WIDTH / 2.0f - buttonWidth / 2.0f,
+                startY + i * buttonSpacing,
+                buttonWidth,
+                buttonHeight
+            };
+
+            if (mx >= buttonRect.x && mx <= buttonRect.x + buttonRect.w &&
+                my >= buttonRect.y && my <= buttonRect.y + buttonRect.h) {
+                resetBoard(mineOptions[i]);  // Call resetBoard here
+                return mineOptions[i];
+            }
+        }
+    }
+    return -1;
 }
