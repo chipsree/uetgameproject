@@ -4,6 +4,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <random>
 #include <string>
+#include <queue>
 
 constexpr int TILE_SIZE = 32;
 constexpr int WINDOW_WIDTH = 960;
@@ -17,7 +18,7 @@ enum class GameState {
     MINE_MENU
 };
 
-// Grid origin for clicks and rendering
+// Grid origin for clicks 
 constexpr int GRID_ORIGIN_X = 0;
 constexpr int GRID_ORIGIN_Y = 96;
 

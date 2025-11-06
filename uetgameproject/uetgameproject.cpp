@@ -73,9 +73,8 @@ int main(int argc, char* argv[])
     TTF_Font* font = TTF_OpenFont("assets/ARIAL.TTF", 32);
 
     // The game loop
-    // Remove this line: GameState currentGameState = GameState::MINE_MENU;
-    extern GameState currentGameState;  // Use the global one from tile.cpp
-    currentGameState = GameState::MINE_MENU;  // Set it to menu
+    extern GameState currentGameState;
+	currentGameState = GameState::MINE_MENU; // Start at mine selection menu
     int numMines = 100;
     placeMines(numMines);  // Remove this line or move it after first menu selection
 

@@ -49,12 +49,10 @@ void revealTile(int row, int col) {
     // If first click is on a mine, move it
     if (firstClick && tile.hasMine) {
         tile.hasMine = false;
-
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> rowDist(0, GRID_ROWS - 1);
         std::uniform_int_distribution<> colDist(0, GRID_COLS - 1);
-
         bool placed = false;
         while (!placed) {
             int r = rowDist(gen);
@@ -65,11 +63,11 @@ void revealTile(int row, int col) {
             }
         }
     }
-
     firstClick = false;
-    tile.revealed = true;
 
+    // Check if the clicked tile is a mine
     if (tile.hasMine) {
+        tile.revealed = true;
         for (int r = 0; r < GRID_ROWS; ++r) {
             for (int c = 0; c < GRID_COLS; ++c) {
                 if (grid[r][c].hasMine) {
@@ -82,12 +80,30 @@ void revealTile(int row, int col) {
         return;
     }
 
-    int adjacent = countAdjacentMines(row, col);
-    if (adjacent == 0) {
-        for (int i = -1; i <= 1; ++i) {
-            for (int j = -1; j <= 1; ++j) {
-                if (i != 0 || j != 0) {
-                    revealTile(row + i, col + j);
+    // Iterative flood-fill to prevent stack overflow
+    std::queue<std::pair<int, int>> toReveal;
+    toReveal.push({ row, col });
+
+    while (!toReveal.empty()) {
+        auto [r, c] = toReveal.front();
+        toReveal.pop();
+
+        if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS)
+            continue;
+
+        Tile& currentTile = grid[r][c];
+        if (currentTile.revealed || currentTile.flagged)
+            continue;
+
+        currentTile.revealed = true;
+
+        int adjacent = countAdjacentMines(r, c);
+        if (adjacent == 0) {
+            for (int i = -1; i <= 1; ++i) {
+                for (int j = -1; j <= 1; ++j) {
+                    if (i != 0 || j != 0) {
+                        toReveal.push({ r + i, c + j });
+                    }
                 }
             }
         }
